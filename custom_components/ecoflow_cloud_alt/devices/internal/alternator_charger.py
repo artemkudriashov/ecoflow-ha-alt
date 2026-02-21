@@ -121,9 +121,9 @@ class AlternatorCharger(BaseDevice):
         # Operation modes
         # Operation modes
         modes = {
-            1: "Charge",
-            2: "Battery Maintenance",
-            3: "Reverse Charge"
+            "Charge": 1,
+            "Battery Maintenance": 2,
+            "Reverse Charge": 3
         }
         
         return [
