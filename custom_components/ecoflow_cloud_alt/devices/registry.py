@@ -14,7 +14,8 @@ from .internal import (delta2 as internal_delta2,
                        powerstream as internal_powerstream,
                        glacier as internal_glacier,
                        wave2 as internal_wave2, 
-                       wave3 as internal_wave3,)
+                       wave3 as internal_wave3,
+                       alternator_charger as internal_alternator_charger,)
 from .public import (delta_pro as public_delta_pro,
                      delta2 as public_delta2,
                      delta2_max as public_delta2_max,
@@ -44,6 +45,7 @@ devices: OrderedDict[str, Type[BaseDevice]] = OrderedDict[str, Type[BaseDevice]]
     "GLACIER": internal_glacier.Glacier,
     "WAVE_2": internal_wave2.Wave2,
     "WAVE_3": internal_wave3.Wave3,
+    "ALTERNATOR_CHARGER": internal_alternator_charger.AlternatorCharger,
     "DIAGNOSTIC": DiagnosticDevice
 })
 
