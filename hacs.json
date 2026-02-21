@@ -1,0 +1,6 @@
+{
+  "name": "EcoFlow Cloud (EU + Alternator Charger)",
+  "render_readme": true,
+  "homeassistant": "2024.11.0",
+  "country": ["EU", "US"]
+}

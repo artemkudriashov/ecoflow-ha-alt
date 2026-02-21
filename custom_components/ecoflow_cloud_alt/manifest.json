@@ -1,0 +1,20 @@
+{
+  "domain": "ecoflow_cloud_alt",
+  "name": "EcoFlow Cloud (EU + Alternator Charger)",
+  "codeowners": [
+    "@artemkudriashov"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "mqtt"
+  ],
+  "documentation": "https://github.com/artemkudriashov/ecoflow-ha-alt",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/artemkudriashov/ecoflow-ha-alt/issues",
+  "requirements": [
+    "paho-mqtt>=1.6.1",
+    "protobuf>=4.23.0",
+    "jsonpath-ng>=1.6.1"
+  ],
+  "version": "1.0.10-alt"
+}
