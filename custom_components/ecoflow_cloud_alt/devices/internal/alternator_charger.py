@@ -2,7 +2,6 @@ from homeassistant.components.number import NumberEntity
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
-from .data_bridge import to_plain
 
 from custom_components.ecoflow_cloud_alt import EcoflowApiClient
 from custom_components.ecoflow_cloud_alt.devices import BaseDevice, const
@@ -142,8 +141,3 @@ class AlternatorCharger(BaseDevice):
                 }
             )
         ]
-
-    def _prepare_data(self, raw_data) -> dict[str, any]:
-        res = super()._prepare_data(raw_data)
-        res = to_plain(res)
-        return res
