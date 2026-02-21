@@ -119,10 +119,11 @@ class AlternatorCharger(BaseDevice):
 
     def selects(self, client: EcoflowApiClient) -> list[SelectEntity]:
         # Operation modes
+        # Operation modes
         modes = {
-            1: "Mode 1",
-            2: "Mode 2",
-            3: "Mode 3"
+            1: "Charge",
+            2: "Battery Maintenance",
+            3: "Reverse Charge"
         }
         
         return [
@@ -136,7 +137,7 @@ class AlternatorCharger(BaseDevice):
                     "operateType": "TCP",
                     "params": {
                         "id": 17,
-                        "operationMode": value
+                        "operationMode": int(value)
                     }
                 }
             )

@@ -140,7 +140,8 @@ class BaseDevice(ABC):
                 
                 if result:
                     _LOGGER.debug(f"Alternator Charger protobuf decoded: {result}")
-                    return result
+                    # Wrap in params for Private API compatibility
+                    return {"params": result}
                 else:
                     _LOGGER.warning("Alternator Charger: empty protobuf decode result")
                     return {}
