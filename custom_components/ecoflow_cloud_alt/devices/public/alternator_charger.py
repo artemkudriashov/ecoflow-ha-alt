@@ -4,9 +4,9 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
 from .data_bridge import to_plain
 
-from custom_components.ecoflow_cloud_alt_alt import EcoflowApiClient
-from custom_components.ecoflow_cloud_alt_alt.devices import BaseDevice, const
-from custom_components.ecoflow_cloud_alt_alt.sensor import (
+from custom_components.ecoflow_cloud_alt import EcoflowApiClient
+from custom_components.ecoflow_cloud_alt.devices import BaseDevice, const
+from custom_components.ecoflow_cloud_alt.sensor import (
     LevelSensorEntity,
     TempSensorEntity,
     InWattsSensorEntity,
@@ -14,9 +14,9 @@ from custom_components.ecoflow_cloud_alt_alt.sensor import (
     AmpSensorEntity,
     StatusSensorEntity
 )
-from custom_components.ecoflow_cloud_alt_alt.switch import EnabledEntity
-from custom_components.ecoflow_cloud_alt_alt.number import MaxBatteryLevelEntity
-from custom_components.ecoflow_cloud_alt_alt.select import DictSelectEntity
+from custom_components.ecoflow_cloud_alt.switch import EnabledEntity
+from custom_components.ecoflow_cloud_alt.number import MaxBatteryLevelEntity
+from custom_components.ecoflow_cloud_alt.select import DictSelectEntity
 
 
 class AlternatorCharger(BaseDevice):
