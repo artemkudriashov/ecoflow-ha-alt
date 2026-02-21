@@ -28,7 +28,7 @@ class AlternatorCharger(BaseDevice):
     def sensors(self, client: EcoflowApiClient) -> list[SensorEntity]:
         return [
             # Battery sensors
-            LevelSensorEntity(client, self, "cms_batt_soc", const.BATTERY_LEVEL),
+            LevelSensorEntity(client, self, "cms_batt_soc", const.MAIN_BATTERY_LEVEL),
             TempSensorEntity(client, self, "cms_batt_temp", const.BATTERY_TEMP),
             
             # Power and voltage
