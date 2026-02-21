@@ -131,7 +131,7 @@ class BaseDevice(ABC):
 
     def _prepare_data(self, raw_data) -> dict[str, any]:
         # Check if this is Alternator Charger (protobuf device)
-        if self.device_info.device_type == "Alternator Charger":
+        if self.device_info.device_type == "ALTERNATOR_CHARGER":
             try:
                 # Try protobuf decoding
                 from .proto import get_alternator_protobuf
