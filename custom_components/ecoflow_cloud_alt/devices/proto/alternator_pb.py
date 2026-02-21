@@ -91,11 +91,12 @@ class AlternatorProtobuf:
             self.pool = None
             self.db = None
 
-    def decode_heartbeat(self, data: bytes) -> dict:
+    def decode_heartbeat(self, data: bytes, seq: int = None) -> dict:
         """Decode Alternator Charger heartbeat protobuf message.
         
         Args:
-            data: Raw protobuf bytes from MQTT
+            data: Raw protobuf bytes from MQTT (may be encrypted)
+            seq: Sequence number from MQTT header (for XOR decryption)
             
         Returns:
             Dictionary with decoded data or empty dict on error
@@ -104,14 +105,29 @@ class AlternatorProtobuf:
             return {}
             
         try:
+            # Alternator Charger uses XOR encryption with sequence number
+            # Check if data looks encrypted (encType == 1)
+            decrypted_data = data
+            
+            if seq is not None:
+                # Try XOR decryption
+                _LOGGER.debug(f"Attempting XOR decryption with seq={seq}")
+                decrypted_data = bytes([b ^ seq for b in data])
+            
             # Try to decode as raw protobuf message without schema
-            # This is a fallback when proto compilation fails
-            result = self._decode_raw_protobuf(data)
+            result = self._decode_raw_protobuf(decrypted_data)
             
             if result:
                 _LOGGER.debug(f"Decoded Alternator heartbeat: {result}")
                 return result
             else:
+                # If decryption failed, try without decryption
+                if seq is not None:
+                    _LOGGER.debug("XOR decryption failed, trying raw data")
+                    result = self._decode_raw_protobuf(data)
+                    if result:
+                        return result
+                
                 _LOGGER.warning("Failed to decode Alternator heartbeat")
                 return {}
                 
@@ -122,8 +138,105 @@ class AlternatorProtobuf:
     def _decode_raw_protobuf(self, data: bytes) -> dict:
         """Decode protobuf without compiled schema using field numbers."""
         result = {}
+        seq_number = None
         
         try:
+            # First, try to extract sequence number from header (field 14)
+            # and encrypted pdata (field 1) if this is a full message
+            header_data = None
+            pdata = None
+            
+            temp_pos = 0
+            while temp_pos < len(data):
+                try:
+                    tag_bytes = []
+                    while temp_pos < len(data):
+                        b = data[temp_pos]
+                        tag_bytes.append(b)
+                        temp_pos += 1
+                        if not (b & 0x80):
+                            break
+                    
+                    if not tag_bytes:
+                        break
+                    
+                    tag = 0
+                    for i, b in enumerate(tag_bytes):
+                        tag |= (b & 0x7f) << (7 * i)
+                    
+                    field_number = tag >> 3
+                    wire_type = tag & 0x7
+                    
+                    # If field 1 (pdata - nested message)
+                    if field_number == 1 and wire_type == 2:
+                        # Read length
+                        length_bytes = []
+                        while temp_pos < len(data):
+                            b = data[temp_pos]
+                            length_bytes.append(b)
+                            temp_pos += 1
+                            if not (b & 0x80):
+                                break
+                        
+                        length = 0
+                        for i, b in enumerate(length_bytes):
+                            length |= (b & 0x7f) << (7 * i)
+                        
+                        if temp_pos + length <= len(data):
+                            pdata = data[temp_pos:temp_pos + length]
+                            temp_pos += length
+                    
+                    # If field 14 (seq - varint)
+                    elif field_number == 14 and wire_type == 0:
+                        value_bytes = []
+                        while temp_pos < len(data):
+                            b = data[temp_pos]
+                            value_bytes.append(b)
+                            temp_pos += 1
+                            if not (b & 0x80):
+                                break
+                        
+                        seq_number = 0
+                        for i, b in enumerate(value_bytes):
+                            seq_number |= (b & 0x7f) << (7 * i)
+                        
+                        _LOGGER.debug(f"Found seq={seq_number} in protobuf header")
+                    
+                    else:
+                        # Skip other fields
+                        if wire_type == 0:  # Varint
+                            while temp_pos < len(data):
+                                b = data[temp_pos]
+                                temp_pos += 1
+                                if not (b & 0x80):
+                                    break
+                        elif wire_type == 1:  # 64-bit
+                            temp_pos += 8
+                        elif wire_type == 2:  # Length-delimited
+                            length_bytes = []
+                            while temp_pos < len(data):
+                                b = data[temp_pos]
+                                length_bytes.append(b)
+                                temp_pos += 1
+                                if not (b & 0x80):
+                                    break
+                            
+                            length = 0
+                            for i, b in enumerate(length_bytes):
+                                length |= (b & 0x7f) << (7 * i)
+                            
+                            temp_pos += length
+                        elif wire_type == 5:  # 32-bit
+                            temp_pos += 4
+                except:
+                    break
+            
+            # If we found encrypted pdata and seq, decrypt it
+            if pdata and seq_number is not None:
+                _LOGGER.debug(f"Decrypting pdata with seq={seq_number}")
+                pdata = bytes([b ^ (seq_number & 0xFF) for b in pdata])
+                data = pdata  # Use decrypted data for actual parsing
+            
             # Protobuf wire format decoder
             from google.protobuf.internal import decoder, wire_format
             
