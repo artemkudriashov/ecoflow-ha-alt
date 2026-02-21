@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package alternator;
+
+// Alternator Charger heartbeat message (cmdFunc: 254, cmdId: 21)
+message AlternatorHeartbeat {
+    optional int32 status1 = 1;
+    optional int32 temp = 102;
+    optional float alternatorPower = 105;
+    optional int32 switchOFF130 = 130;
+    optional int32 startVoltage = 138;  // *0.1
+    optional float carBatVolt = 139;
+    optional float batSoc = 262;
+    optional int32 chargeToFull268 = 268;
+    optional int32 unknown269 = 269;
+    optional float stationPower = 425;
+    optional int32 unknown427 = 427;
+    optional int32 unknown428 = 428;
+    optional int32 operationMode = 581;
+    optional int32 startStop = 597;
+    optional float permanentWatts = 598;
+    optional float wifiRssi = 602;
+    optional float ratedPower = 603;
+    optional float cableLength608 = 608;
+    optional float unknown609 = 609;
+}
+
+// Alternator Set command (for sending commands)
+message AlternatorSet {
+    optional int32 switchOFF130 = 1;
+    optional int32 operationMode = 116;  // 1=Charge; 2=Battery Maintenance; 3=Reverse Charge
+    optional int32 startStop = 122;       // 0=off; 1=on
+    optional float permanentWatts = 123;  // 0-800 Watt
+    optional int32 startVoltage = 137;    // 11-30 V *10
+    optional float cableLength608 = 203;
+}
+
+// Header for protobuf messages
+message SetHeader {
+    optional AlternatorSet pdata = 1;
+    int32 src = 2;
+    int32 dest = 3;
+    int32 d_src = 4;
+    int32 d_dest = 5;
+    int32 enc_type = 6;
+    int32 check_type = 7;
+    int32 cmd_func = 8;
+    int32 cmd_id = 9;
+    int32 data_len = 10;
+    int32 need_ack = 11;
+    int32 is_ack = 12;
+    int32 seq = 14;
+    int32 product_id = 15;
+    int32 version = 16;
+    int32 payload_ver = 17;
+    int32 time_snap = 18;
+    int32 is_rw_cmd = 19;
+    int32 is_queue = 20;
+    int32 ack_type = 21;
+    string code = 22;
+    string from = 23;
+    string module_sn = 24;
+    string device_sn = 25;
+}
+
+message SetMessage {
+    SetHeader header = 1;
+}
+
+// Response header with AlternatorHeartbeat
+message HeartbeatHeader {
+    AlternatorHeartbeat pdata = 1;
+    int32 src = 2;
+    int32 dest = 3;
+    int32 d_src = 4;
+    int32 d_dest = 5;
+    int32 cmd_func = 8;
+    int32 cmd_id = 9;
+    int32 data_len = 10;
+    int32 need_ack = 11;
+    int32 is_ack = 12;
+    int32 seq = 14;
+    int32 product_id = 15;
+    int32 version = 16;
+    int32 payload_ver = 17;
+}
+
+message HeartbeatMessage {
+    HeartbeatHeader header = 1;
+}

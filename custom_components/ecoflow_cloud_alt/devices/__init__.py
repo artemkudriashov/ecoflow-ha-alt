@@ -130,6 +130,26 @@ class BaseDevice(ABC):
 
 
     def _prepare_data(self, raw_data) -> dict[str, any]:
+        # Check if this is Alternator Charger (protobuf device)
+        if self.device_info.device_type == "Alternator Charger":
+            try:
+                # Try protobuf decoding
+                from .proto import get_alternator_protobuf
+                decoder = get_alternator_protobuf()
+                result = decoder.decode_heartbeat(raw_data)
+                
+                if result:
+                    _LOGGER.debug(f"Alternator Charger protobuf decoded: {result}")
+                    return result
+                else:
+                    _LOGGER.warning("Alternator Charger: empty protobuf decode result")
+                    return {}
+            except Exception as error:
+                _LOGGER.error(f"Alternator Charger protobuf decode error: {error}")
+                # Fallback to JSON
+                pass
+        
+        # Standard JSON decoding for other devices
         try:
             try:
                 payload = raw_data.decode("utf-8", errors='ignore')
