@@ -12,7 +12,7 @@ from .api.public_api import EcoflowPublicApiClient
 
 _LOGGER = logging.getLogger(__name__)
 
-ECOFLOW_DOMAIN = "ecoflow_cloud"
+ECOFLOW_DOMAIN = "ecoflow_cloud_alt"
 CONFIG_VERSION = 6
 
 _PLATFORMS = {
