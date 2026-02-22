@@ -51,9 +51,15 @@ class DictSelectEntity(BaseSelectEntity):
         return self._current_option
 
     def select_option(self, option: str) -> None:
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        _LOGGER.warning(f"⚠️ SELECT OPTION CALLED: {self._mqtt_key_adopted} = {option}")
         if self._command:
             val = self._options_dict[option]
+            _LOGGER.warning(f"⚠️ SENDING COMMAND: value={val}")
             self.send_set_message(val, self.command_dict(val))
+        else:
+            _LOGGER.error(f"❌ NO COMMAND for {self._mqtt_key_adopted}")
 
 class TimeoutDictSelectEntity(DictSelectEntity):
     _attr_icon = "mdi:timer-outline"

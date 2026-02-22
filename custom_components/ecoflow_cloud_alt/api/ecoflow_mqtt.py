@@ -98,9 +98,31 @@ class EcoflowMQTTClient:
         self.__send(self.__devices[device_sn].device_info.get_topic, json.dumps(payload))
 
     def send_set_message(self, device_sn: str, mqtt_state: dict[str, Any], command: dict):
+        # Check if this is Alternator Charger (needs protobuf encoding)
+        device = self.__devices[device_sn]
+        if device.device_info.device_type == "ALTERNATOR_CHARGER":
+            # Use protobuf encoding for Alternator Charger commands
+            from ..devices.proto import encode_alternator_command
+            
+            # Extract params from command dict
+            params = command.get("params", {})
+            if "id" in params:
+                params.pop("id")  # Remove id field, not needed in protobuf
+            
+            # Encode to protobuf
+            try:
+                protobuf_bytes = encode_alternator_command(params)
+                _LOGGER.debug(f"Encoded Alternator command: {params} -> {len(protobuf_bytes)} bytes")
+                self.__send_raw(device.device_info.set_topic, protobuf_bytes)
+                device.data.update_to_target_state(mqtt_state)
+                return
+            except Exception as error:
+                _LOGGER.error(f"Failed to encode Alternator command: {error}")
+                return
+        
+        # Standard JSON encoding for other devices
+        device.data.update_to_target_state(mqtt_state)
         self.__devices[device_sn].data.update_to_target_state(mqtt_state)
-        payload = self.__prepare_payload(command)
-        self.__send(self.__devices[device_sn].device_info.set_topic, json.dumps(payload))
 
     def stop(self):
         self.__client.unsubscribe(self.__target_topics())
@@ -129,6 +151,16 @@ class EcoflowMQTTClient:
             _LOGGER.error(error, "Error on topic " + topic + " and message " + message)
         except Exception as error:
             _LOGGER.debug(error, "Error on topic " + topic + " and message " + message)
+
+
+    def __send_raw(self, topic: str, message_bytes: bytes):
+        try:
+            info = self.__client.publish(topic, message_bytes, 1)
+            _LOGGER.debug(f"Sending {len(message_bytes)} protobuf bytes to {topic}: {info} ({info.is_published()})")
+        except RuntimeError as error:
+            _LOGGER.error(f"Runtime error sending to {topic}: {error}")
+        except Exception as error:
+            _LOGGER.error(f"Error sending to {topic}: {error}")
 
     def __target_topics(self) -> list[str]:
         topics = []

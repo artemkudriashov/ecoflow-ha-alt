@@ -110,9 +110,21 @@ class AlternatorProtobuf:
             decrypted_data = data
             
             if seq is not None:
-                # Try XOR decryption
-                _LOGGER.debug(f"Attempting XOR decryption with seq={seq}")
-                decrypted_data = bytes([b ^ seq for b in data])
+                # Command responses have timestamp seq (large), heartbeats have counter (small)
+                if seq > 100000000:
+                    # Command response - try raw decode first (no XOR)
+                    _LOGGER.debug(f"Command response detected (seq={seq}), trying raw decode")
+                    result = self._decode_raw_protobuf(data)
+                    if result:
+                        _LOGGER.debug(f"Decoded command response: {result}")
+                        return result
+                    # Fallback to XOR if raw failed
+                    _LOGGER.debug("Raw decode failed, trying XOR")
+                    decrypted_data = bytes([b ^ seq for b in data])
+                else:
+                    # Heartbeat - use XOR decryption
+                    _LOGGER.debug(f"Attempting XOR decryption with seq={seq}")
+                    decrypted_data = bytes([b ^ seq for b in data])
             
             # Try to decode as raw protobuf message without schema
             result = self._decode_raw_protobuf(decrypted_data)
@@ -231,11 +243,18 @@ class AlternatorProtobuf:
                 except:
                     break
             
-            # If we found encrypted pdata and seq, decrypt it
+            # If we found encrypted pdata and seq, decrypt it (only for heartbeats)
             if pdata and seq_number is not None:
-                _LOGGER.debug(f"Decrypting pdata with seq={seq_number}")
-                pdata = bytes([b ^ (seq_number & 0xFF) for b in pdata])
-                data = pdata  # Use decrypted data for actual parsing
+                # Command responses have large seq (timestamp), heartbeats have small seq
+                if seq_number > 100000000:
+                    # Command response - NO decryption
+                    _LOGGER.debug(f"Command response detected (seq={seq_number}), using raw pdata")
+                    data = pdata
+                else:
+                    # Heartbeat - decrypt with XOR
+                    _LOGGER.debug(f"Decrypting pdata with seq={seq_number}")
+                    pdata = bytes([b ^ (seq_number & 0xFF) for b in pdata])
+                    data = pdata  # Use decrypted data for actual parsing
             
             # Protobuf wire format decoder
             from google.protobuf.internal import decoder, wire_format
@@ -343,7 +362,12 @@ class AlternatorProtobuf:
                         }
                         
                         if field_number in float_map:
-                            result[float_map[field_number]] = value
+                            field_name = float_map[field_number]
+                            # Invert sign for power fields (EcoFlow reports output as negative)
+                            if field_name in ['alternatorPower', 'stationPower']:
+                                result[field_name] = -value
+                            else:
+                                result[field_name] = value
                 else:
                     # Unknown wire type, skip
                     break
@@ -369,3 +393,144 @@ def get_alternator_protobuf():
     if _alternator_proto is None:
         _alternator_proto = AlternatorProtobuf()
     return _alternator_proto
+
+
+
+
+def encode_alternator_command(params: dict) -> bytes:
+    """Encode Alternator Charger command to protobuf format (full setMessage)."""
+    import time
+    import struct
+    import logging
+    
+    _LOGGER = logging.getLogger(__name__)
+    
+    seq = int(time.time() * 1000)
+    
+    # Field map for alternatorSet (pdata)
+    pdata_field_map = {
+        'switchOFF130': 1,
+        'operationMode': 116,
+        'startStop': 122,
+        'permanentWatts': 123,
+        'startVoltage': 137,
+        'cableLength608': 203
+    }
+    
+    def encode_varint(value):
+        """Encode integer as protobuf varint."""
+        result = []
+        value = int(value) & 0xFFFFFFFF
+        while value > 0x7F:
+            result.append((value & 0x7F) | 0x80)
+            value >>= 7
+        result.append(value & 0x7F)
+        return bytes(result)
+    
+    def encode_string(s):
+        """Encode string as length-delimited."""
+        s_bytes = s.encode('utf-8')
+        return encode_varint(len(s_bytes)) + s_bytes
+    
+    # Build alternatorSet (pdata)
+    pdata_bytes = bytearray()
+    for key, value in params.items():
+        if key in pdata_field_map:
+            field_num = pdata_field_map[key]
+            if key in ['permanentWatts', 'cableLength608']:
+                # Float (wire type 5)
+                tag = (field_num << 3) | 5
+                pdata_bytes.extend(encode_varint(tag))
+                pdata_bytes.extend(struct.pack('<f', float(value)))
+            elif key == 'startVoltage':
+                # Int32 (wire type 0) - multiply by 10
+                tag = (field_num << 3) | 0
+                pdata_bytes.extend(encode_varint(tag))
+                pdata_bytes.extend(encode_varint(int(value * 10)))
+            else:
+                # Int32 (wire type 0)
+                tag = (field_num << 3) | 0
+                pdata_bytes.extend(encode_varint(tag))
+                pdata_bytes.extend(encode_varint(int(value)))
+    
+    # Calculate dataLen based on pdata content
+    if 'permanentWatts' in params or 'cableLength608' in params:
+        data_len = 6
+    elif 'startVoltage' in params:
+        data_len = 4
+    else:
+        data_len = 3
+    
+    # Build setHeader
+    header_bytes = bytearray()
+    
+    # Field 1: pdata (alternatorSet) - length-delimited
+    header_bytes.extend(encode_varint((1 << 3) | 2))
+    header_bytes.extend(encode_varint(len(pdata_bytes)))
+    header_bytes.extend(pdata_bytes)
+    
+    # Field 2: src = 32
+    header_bytes.extend(encode_varint((2 << 3) | 0))
+    header_bytes.extend(encode_varint(32))
+    
+    # Field 3: dest = 20
+    header_bytes.extend(encode_varint((3 << 3) | 0))
+    header_bytes.extend(encode_varint(20))
+    
+    # Field 4: d_src = 1
+    header_bytes.extend(encode_varint((4 << 3) | 0))
+    header_bytes.extend(encode_varint(1))
+    
+    # Field 5: d_dest = 1
+    header_bytes.extend(encode_varint((5 << 3) | 0))
+    header_bytes.extend(encode_varint(1))
+    
+    # Field 6: enc_type = 1
+    header_bytes.extend(encode_varint((6 << 3) | 0))
+    header_bytes.extend(encode_varint(1))
+    
+    # Field 7: check_type = 3
+    header_bytes.extend(encode_varint((7 << 3) | 0))
+    header_bytes.extend(encode_varint(3))
+    
+    # Field 8: cmd_func = 254
+    header_bytes.extend(encode_varint((8 << 3) | 0))
+    header_bytes.extend(encode_varint(254))
+    
+    # Field 9: cmd_id = 17
+    header_bytes.extend(encode_varint((9 << 3) | 0))
+    header_bytes.extend(encode_varint(17))
+    
+    # Field 10: data_len
+    header_bytes.extend(encode_varint((10 << 3) | 0))
+    header_bytes.extend(encode_varint(data_len))
+    
+    # Field 11: need_ack = 1
+    header_bytes.extend(encode_varint((11 << 3) | 0))
+    header_bytes.extend(encode_varint(1))
+    
+    # Field 14: seq (timestamp)
+    header_bytes.extend(encode_varint((14 << 3) | 0))
+    header_bytes.extend(encode_varint(seq))
+    
+    # Field 16: version = 19
+    header_bytes.extend(encode_varint((16 << 3) | 0))
+    header_bytes.extend(encode_varint(19))
+    
+    # Field 17: payload_ver = 1
+    header_bytes.extend(encode_varint((17 << 3) | 0))
+    header_bytes.extend(encode_varint(1))
+    
+    # Field 23: from = "Android"
+    header_bytes.extend(encode_varint((23 << 3) | 2))
+    header_bytes.extend(encode_string("Android"))
+    
+    # Build setMessage (field 1 = setHeader)
+    message_bytes = bytearray()
+    message_bytes.extend(encode_varint((1 << 3) | 2))  # Field 1, wire type 2
+    message_bytes.extend(encode_varint(len(header_bytes)))
+    message_bytes.extend(header_bytes)
+    
+    _LOGGER.debug(f"Encoded Alternator command (full setMessage): {params} -> {len(message_bytes)} bytes")
+    return bytes(message_bytes)
+
